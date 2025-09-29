@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BotHostify - Host Your Scripts</title>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for a clean look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom Styles -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark gray background */
+            color: #d1d5db; /* Light gray text */
+        }
+        /* Custom scrollbar for a modern feel */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        /* Style for the file drop zone */
+        .drop-zone {
+            border: 2px dashed #4b5563;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+        .drop-zone-over {
+            border-color: #3b82f6;
+            background-color: #1f2937;
+        }
+        /* Loading spinner animation */
+        .spinner {
+            border-color: #3b82f6;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* Custom switch toggle */
+        .switch-checkbox:checked + .switch-label {
+            background-color: #3b82f6;
+        }
+        .switch-checkbox:checked + .switch-label .switch-button {
+            transform: translateX(100%);
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Main Container -->
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-4xl md:text-5xl font-bold text-white">Bot<span class="text-blue-500">Hostify</span></h1>
+            <p class="text-gray-400 mt-2">A simple platform to run your Python and Node.js scripts.</p>
+        </header>
+
+        <!-- User ID Display & Welcome Section -->
+        <div id="welcome-section" class="bg-gray-800 p-4 rounded-lg mb-8 text-center hidden">
+            <p class="text-gray-300">Your unique User ID is:</p>
+            <div class="flex items-center justify-center mt-2">
+                <code id="user-id-display" class="bg-gray-900 text-blue-400 px-3 py-1 rounded-md text-lg">Loading...</code>
+                <button id="copy-user-id-btn" class="ml-3 p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors" title="Copy User ID">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+                        <path d="M4 1.5H3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1h1V1.5z"/>
+                        <path d="M4.5 1.5a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-6a.5.5 0 0 1-.5-.5v-1zM4.5 0A1.5 1.5 0 0 0 3 1.5v1A1.5 1.5 0 0 0 4.5 4h6A1.5 1.5 0 0 0 12 2.5v-1A1.5 1.5 0 0 0 10.5 0h-6z"/>
+                    </svg>
+                </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">This ID is saved in your browser. Keep it safe!</p>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+            <!-- Left Column: Upload & Controls -->
+            <div class="flex flex-col gap-8">
+                <!-- File Upload Card -->
+                <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-semibold text-white mb-4">Upload Scripts</h2>
+                    <div id="drop-zone" class="drop-zone rounded-lg p-8 text-center cursor-pointer">
+                        <p class="text-gray-400">Drag & drop up to 7 files here</p>
+                        <p class="text-gray-500 text-sm my-2">or</p>
+                        <button id="browse-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                            Browse Files
+                        </button>
+                        <input type="file" id="file-input" multiple class="hidden">
+                    </div>
+                    <div id="file-list" class="mt-4 text-sm text-gray-300"></div>
+                    <button id="upload-btn" class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>
+                        Upload
+                    </button>
+                </div>
+
+                <!-- Controls Card -->
+                <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-semibold text-white mb-4">Run Options</h2>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-300">Enable Premium Mode (250MB RAM)</span>
+                        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" name="premium-toggle" id="premium-toggle" class="switch-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                            <label for="premium-toggle" class="switch-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer">
+                                <span class="switch-button inline-block w-6 h-6 rounded-full bg-white shadow-lg transform transition-transform duration-200 ease-in-out"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Note: Free tier scripts (150MB RAM) are deleted after 15 minutes of runtime.</p>
+                </div>
+            </div>
+
+            <!-- Right Column: My Scripts Dashboard -->
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-semibold text-white">My Scripts</h2>
+                    <button id="refresh-scripts-btn" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors" title="Refresh list">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
+                           <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                           <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="scripts-container" class="space-y-4 h-96 overflow-y-auto pr-2">
+                    <!-- Script cards will be injected here by JavaScript -->
+                    <div id="no-scripts-message" class="text-center py-16 text-gray-500">
+                        <p>You haven't uploaded any scripts yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Viewer Modal -->
+    <div id="log-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-gray-900 rounded-lg shadow-xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 id="log-modal-title" class="text-xl font-semibold text-white">Console Logs</h3>
+                <button id="close-log-modal-btn" class="p-2 text-gray-400 hover:text-white rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-x" viewBox="0 0 16 16">
+                        <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                </button>
+            </div>
+            <pre id="log-content" class="flex-grow p-4 bg-black text-sm text-gray-300 overflow-y-auto whitespace-pre-wrap font-mono"></pre>
+        </div>
+    </div>
+
+    <!-- Notification / Toast Message -->
+    <div id="notification" class="fixed bottom-5 right-5 bg-gray-800 text-white py-3 px-5 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+        <p id="notification-message">Message here</p>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="spinner w-12 h-12 rounded-full border-4"></div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // --- IMPORTANT: CONFIGURE YOUR BACKEND DETAILS HERE ---
+        const CONFIG = {
+            // Replace with your Termux Wi-Fi IP and the port you chose (e.g., 8000).
+            BACKEND_URL: "http://192.168.1.75:8000",
+
+            // Replace with the SAME secret key you set in your main.py file.
+            API_KEY: "mYnEwApIkEyIsVeRySeCuReAnDlOnG9876"
+        };
+        // ----------------------------------------------------
+
+        const app = {
+            state: {
+                userId: null,
+                scripts: [],
+                selectedFiles: [],
+                logInterval: null,
+            },
+
+            // --- DOM Element References ---
+            elements: {
+                welcomeSection: document.getElementById('welcome-section'),
+                userIdDisplay: document.getElementById('user-id-display'),
+                copyUserIdBtn: document.getElementById('copy-user-id-btn'),
+                dropZone: document.getElementById('drop-zone'),
+                fileInput: document.getElementById('file-input'),
+                browseBtn: document.getElementById('browse-btn'),
+                fileList: document.getElementById('file-list'),
+                uploadBtn: document.getElementById('upload-btn'),
+                premiumToggle: document.getElementById('premium-toggle'),
+                scriptsContainer: document.getElementById('scripts-container'),
+                noScriptsMessage: document.getElementById('no-scripts-message'),
+                refreshScriptsBtn: document.getElementById('refresh-scripts-btn'),
+                logModal: document.getElementById('log-modal'),
+                logModalTitle: document.getElementById('log-modal-title'),
+                logContent: document.getElementById('log-content'),
+                closeLogModalBtn: document.getElementById('close-log-modal-btn'),
+                notification: document.getElementById('notification'),
+                notificationMessage: document.getElementById('notification-message'),
+                loadingOverlay: document.getElementById('loading-overlay'),
+            },
+
+            // --- Initialization ---
+            init() {
+                this.bindEvents();
+                this.state.userId = localStorage.getItem('botHostUserId');
+                if (this.state.userId) {
+                    this.elements.userIdDisplay.textContent = this.state.userId;
+                    this.elements.welcomeSection.classList.remove('hidden');
+                    this.fetchScripts();
+                } else {
+                    this.api.registerUser();
+                }
+            },
+
+            // --- Event Binding ---
+            bindEvents() {
+                // File Upload Events
+                this.elements.browseBtn.addEventListener('click', () => this.elements.fileInput.click());
+                this.elements.fileInput.addEventListener('change', (e) => this.handleFileSelect(e.target.files));
+                this.elements.dropZone.addEventListener('dragover', this.handleDragOver.bind(this));
+                this.elements.dropZone.addEventListener('dragleave', this.handleDragLeave.bind(this));
+                this.elements.dropZone.addEventListener('drop', this.handleDrop.bind(this));
+                this.elements.uploadBtn.addEventListener('click', this.handleUpload.bind(this));
+
+                // Script & UI Control Events
+                this.elements.copyUserIdBtn.addEventListener('click', this.copyUserId.bind(this));
+                this.elements.refreshScriptsBtn.addEventListener('click', this.fetchScripts.bind(this));
+                this.elements.closeLogModalBtn.addEventListener('click', this.closeLogModal.bind(this));
+
+                // Dynamic events for script cards
+                this.elements.scriptsContainer.addEventListener('click', (e) => {
+                    const button = e.target.closest('button');
+                    if (!button) return;
+
+                    const action = button.dataset.action;
+                    const filename = button.dataset.filename;
+
+                    if (action && filename) {
+                        this.handleScriptAction(action, filename);
+                    }
+                });
+            },
+
+            // --- API Communication Layer ---
+            api: {
+                async registerUser() {
+                    app.showLoading(true);
+                    try {
+                        const response = await fetch(`${CONFIG.BACKEND_URL}/api/register`, {
+                            method: 'POST',
+                            headers: { 'X-Api-Key': CONFIG.API_KEY },
+                        });
+                        if (!response.ok) throw new Error('Failed to register user.');
+                        const data = await response.json();
+                        app.state.userId = data.user_id;
+                        localStorage.setItem('botHostUserId', data.user_id);
+                        app.elements.userIdDisplay.textContent = data.user_id;
+                        app.elements.welcomeSection.classList.remove('hidden');
+                        app.showNotification('Welcome! Your new User ID has been created.', 'success');
+                        app.fetchScripts();
+                    } catch (error) {
+                        console.error('Registration Error:', error);
+                        app.showNotification('Could not connect to the backend.', 'error');
+                    } finally {
+                        app.showLoading(false);
+                    }
+                },
+
+                async getScripts() {
+                    if (!app.state.userId) return;
+                    try {
+                        const response = await fetch(`${CONFIG.BACKEND_URL}/api/scripts/${app.state.userId}`, {
+                            headers: { 'X-Api-Key': CONFIG.API_KEY },
+                        });
+                        if (!response.ok) throw new Error('Failed to fetch scripts.');
+                        return await response.json();
+                    } catch (error) {
+                        console.error('Fetch Scripts Error:', error);
+                        app.showNotification('Failed to fetch scripts from backend.', 'error');
+                        return [];
+                    }
+                },
+                
+                async uploadFiles(files) {
+                    app.showLoading(true);
+                    const formData = new FormData();
+                    files.forEach(file => formData.append('files', file));
+                    
+                    try {
+                         const response = await fetch(`${CONFIG.BACKEND_URL}/api/upload/${app.state.userId}`, {
+                            method: 'POST',
+                            headers: { 'X-Api-Key': CONFIG.API_KEY },
+                            body: formData,
+                        });
+                        const data = await response.json();
+                        if (!response.ok) throw new Error(data.error || 'Upload failed.');
+                        app.showNotification('Files uploaded successfully!', 'success');
+                        app.resetFileSelection();
+                        app.fetchScripts();
+                    } catch (error) {
+                        console.error('Upload Error:', error);
+                        app.showNotification(`Upload failed: ${error.message}`, 'error');
+                    } finally {
+                        app.showLoading(false);
+                    }
+                },
+
+                async controlScript(action, filename) {
+                    app.showLoading(true);
+                    let url, method, body;
+                    
+                    const isPremium = app.elements.premiumToggle.checked;
+
+                    switch(action) {
+                        case 'start':
+                            url = `${CONFIG.BACKEND_URL}/api/scripts/${app.state.userId}/${filename}/start`;
+                            method = 'POST';
+                            body = JSON.stringify({ is_premium: isPremium });
+                            break;
+                        case 'stop':
+                            url = `${CONFIG.BACKEND_URL}/api/scripts/${app.state.userId}/${filename}/stop`;
+                            method = 'POST';
+                            break;
+                        case 'delete':
+                            url = `${CONFIG.BACKEND_URL}/api/scripts/${app.state.userId}/${filename}`;
+                            method = 'DELETE';
+                            break;
+                        default:
+                            app.showLoading(false);
+                            return;
+                    }
+
+                    try {
+                        const response = await fetch(url, {
+                            method: method,
+                            headers: {
+                                'X-Api-Key': CONFIG.API_KEY,
+                                'Content-Type': 'application/json'
+                            },
+                             body: body,
+                        });
+                        const data = await response.json();
+                        if (!response.ok) throw new Error(data.error || `Action ${action} failed.`);
+                        app.showNotification(data.message || `Action ${action} successful.`, 'success');
+                        setTimeout(app.fetchScripts.bind(app), 1000); // Refresh list after a short delay
+                    } catch (error) {
+                        console.error(`${action} error:`, error);
+                        app.showNotification(error.message, 'error');
+                    } finally {
+                        app.showLoading(false);
+                    }
+                },
+
+                async getLogs(filename) {
+                     try {
+                        const response = await fetch(`${CONFIG.BACKEND_URL}/api/logs/${app.state.userId}/${filename}`, {
+                            headers: { 'X-Api-Key': CONFIG.API_KEY },
+                        });
+                        if (!response.ok) throw new Error('Failed to fetch logs.');
+                        const data = await response.json();
+                        app.elements.logContent.textContent = data.logs || '(No output yet)';
+                        // Auto-scroll to bottom
+                        app.elements.logContent.scrollTop = app.elements.logContent.scrollHeight;
+                    } catch (error) {
+                        console.error('Fetch Logs Error:', error);
+                        app.elements.logContent.textContent = 'Error fetching logs from backend...';
+                        app.closeLogModal();
+                    }
+                }
+            },
+
+            // --- Rendering and UI Updates ---
+            renderScripts() {
+                this.elements.scriptsContainer.innerHTML = '';
+                if (this.state.scripts.length === 0) {
+                    this.elements.scriptsContainer.appendChild(this.elements.noScriptsMessage);
+                    this.elements.noScriptsMessage.classList.remove('hidden');
+                    return;
+                }
+
+                this.elements.noScriptsMessage.classList.add('hidden');
+                this.state.scripts.forEach(script => {
+                    const isRunning = script.status === 'running';
+                    const statusColor = isRunning ? 'text-green-400' : (script.status.startsWith('killed') ? 'text-red-400' : 'text-gray-400');
+                    const statusIcon = isRunning ? 
+                        `<div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>` : 
+                        `<div class="w-2 h-2 ${script.status.startsWith('killed') ? 'bg-red-400' : 'bg-gray-500'} rounded-full"></div>`;
+                    
+                    const card = `
+                        <div class="bg-gray-900 p-4 rounded-lg flex items-center justify-between gap-4">
+                            <div class="flex items-center gap-3 overflow-hidden">
+                                ${statusIcon}
+                                <div class="flex-grow overflow-hidden">
+                                    <p class="text-white font-medium truncate" title="${script.file_name}">${script.file_name}</p>
+                                    <p class="text-xs ${statusColor} capitalize">${script.status.replace('_', ' ')}</p>
+                                </div>
+                            </div>
+                            <div class="flex-shrink-0 flex gap-2">
+                                <button data-action="${isRunning ? 'stop' : 'start'}" data-filename="${script.file_name}" class="${isRunning ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white p-2 rounded-lg transition-colors" title="${isRunning ? 'Stop' : 'Start'}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                        ${isRunning ? '<path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>' : '<path d="M10.804 8L5 4.633v6.734L10.804 8z"/>'}
+                                    </svg>
+                                </button>
+                                <button data-action="logs" data-filename="${script.file_name}" class="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition-colors" title="View Logs">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                        <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm12 1a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3zM3 7a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/>
+                                    </svg>
+                                </button>
+                                <button data-action="delete" data-filename="${script.file_name}" class="bg-gray-700 hover:bg-red-600 text-white p-2 rounded-lg transition-colors" title="Delete">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                        <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    this.elements.scriptsContainer.insertAdjacentHTML('beforeend', card);
+                });
+            },
+
+            showNotification(message, type = 'info') {
+                this.elements.notificationMessage.textContent = message;
+                const notification = this.elements.notification;
+                notification.classList.remove('bg-green-600', 'bg-red-600', 'bg-gray-800');
+                if (type === 'success') {
+                    notification.classList.add('bg-green-600');
+                } else if (type === 'error') {
+                    notification.classList.add('bg-red-600');
+                } else {
+                     notification.classList.add('bg-gray-800');
+                }
+                notification.classList.remove('translate-y-20', 'opacity-0');
+                setTimeout(() => {
+                    notification.classList.add('translate-y-20', 'opacity-0');
+                }, 4000);
+            },
+            
+            showLoading(isLoading) {
+                if (isLoading) {
+                    this.elements.loadingOverlay.classList.remove('hidden');
+                } else {
+                    this.elements.loadingOverlay.classList.add('hidden');
+                }
+            },
+
+            openLogModal(filename) {
+                this.elements.logModalTitle.textContent = `Console Logs for: ${filename}`;
+                this.elements.logContent.textContent = 'Fetching logs...';
+                this.elements.logModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+
+                // Fetch immediately, then set an interval
+                this.api.getLogs(filename);
+                this.state.logInterval = setInterval(() => this.api.getLogs(filename), 3000);
+            },
+
+            closeLogModal() {
+                if (this.state.logInterval) {
+                    clearInterval(this.state.logInterval);
+                    this.state.logInterval = null;
+                }
+                this.elements.logModal.classList.add('hidden');
+                document.body.style.overflow = 'auto';
+            },
+
+            // --- Handlers ---
+            handleFileSelect(files) {
+                this.state.selectedFiles = Array.from(files);
+                this.elements.fileList.innerHTML = this.state.selectedFiles.map(f => `<p>${f.name}</p>`).join('');
+                this.elements.uploadBtn.disabled = this.state.selectedFiles.length === 0;
+            },
+            
+            handleDragOver(e) {
+                e.preventDefault();
+                this.elements.dropZone.classList.add('drop-zone-over');
+            },
+            
+            handleDragLeave(e) {
+                e.preventDefault();
+                this.elements.dropZone.classList.remove('drop-zone-over');
+            },
+            
+            handleDrop(e) {
+                e.preventDefault();
+                this.elements.dropZone.classList.remove('drop-zone-over');
+                const files = e.dataTransfer.files;
+                if (files.length) {
+                    this.handleFileSelect(files);
+                }
+            },
+
+            handleUpload() {
+                if (this.state.selectedFiles.length > 0) {
+                    this.api.uploadFiles(this.state.selectedFiles);
+                }
+            },
+            
+            async fetchScripts() {
+                this.showLoading(true);
+                this.state.scripts = await this.api.getScripts();
+                this.renderScripts();
+                this.showLoading(false);
+            },
+            
+            handleScriptAction(action, filename) {
+                if (action === 'logs') {
+                    this.openLogModal(filename);
+                } else if (action === 'delete') {
+                    if (confirm(`Are you sure you want to delete ${filename}? This action cannot be undone.`)) {
+                         this.api.controlScript(action, filename);
+                    }
+                }
+                else {
+                    this.api.controlScript(action, filename);
+                }
+            },
+
+            copyUserId() {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(this.state.userId).then(() => {
+                        this.showNotification('User ID copied to clipboard!', 'success');
+                    }, () => {
+                        this.showNotification('Failed to copy User ID.', 'error');
+                    });
+                } else {
+                    // Fallback for older browsers
+                     const textArea = document.createElement("textarea");
+                     textArea.value = this.state.userId;
+                     document.body.appendChild(textArea);
+                     textArea.focus();
+                     textArea.select();
+                     try {
+                        document.execCommand('copy');
+                        this.showNotification('User ID copied to clipboard!', 'success');
+                     } catch (err) {
+                        this.showNotification('Failed to copy User ID.', 'error');
+                     }
+                     document.body.removeChild(textArea);
+                }
+            },
+
+            resetFileSelection() {
+                this.state.selectedFiles = [];
+                this.elements.fileList.innerHTML = '';
+                this.elements.fileInput.value = '';
+                this.elements.uploadBtn.disabled = true;
+            },
+        };
+
+        // --- Start the application ---
+        document.addEventListener('DOMContentLoaded', () => app.init());
+    </script>
+
+</body>
+</html>
