@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BotHostify - Host Your Scripts</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://ucarecdn.com/libs/widget/3.x/uploadcare.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            background-color: #111827; /* gray-900 */
+            color: #d1d5db; /* gray-300 */
+        }
+        .modal-bg {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-running { background-color: #22c55e; /* green-500 */ }
+        .status-stopped { background-color: #ef4444; /* red-500 */ }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #3b82f6; /* blue-500 */
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Styles for AI-generated Markdown content */
+        .markdown-content h1, .markdown-content h2 { font-size: 1.25em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; border-bottom: 1px solid #4b5563; padding-bottom: 0.25em; }
+        .markdown-content p { margin-bottom: 1em; }
+        .markdown-content code { background-color: #374151; padding: 0.2em 0.4em; border-radius: 3px; font-family: monospace; }
+        .markdown-content pre { background-color: #1f2937; padding: 1em; border-radius: 5px; overflow-x: auto; margin-bottom: 1em; }
+        .markdown-content pre code { padding: 0; background-color: transparent; }
+        .markdown-content ul { list-style-type: disc; margin-left: 1.5em; margin-bottom: 1em; }
+        .markdown-content blockquote { border-left: 4px solid #4b5563; padding-left: 1em; color: #9ca3af; margin-bottom: 1em; }
+    </style>
+</head>
+<body class="font-sans">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white">Bot<span class="text-blue-500">Hostify</span></h1>
+            <p class="text-gray-400 mt-2">The simplest way to host your Python & Node.js scripts.</p>
+        </header>
+
+        <section id="user-info" class="mb-6 p-4 bg-gray-800 rounded-lg flex items-center justify-between">
+            <div>
+                <span class="text-sm text-gray-400">Your User ID:</span>
+                <span id="user-id-display" class="font-mono text-sm bg-gray-700 text-blue-400 px-2 py-1 rounded">Loading...</span>
+            </div>
+            <button id="refresh-scripts-btn" class="text-blue-400 hover:text-blue-300 transition-colors">&#x21bb; Refresh</button>
+        </section>
+
+        <section id="upload-section" class="mb-8">
+            <h2 class="text-2xl font-semibold text-white mb-4">Upload Your Scripts</h2>
+            <div class="bg-gray-800 p-6 rounded-lg text-center">
+                <p class="mb-4">Upload .py, .js, or .zip files. ZIP archives will be automatically extracted.</p>
+                <input type="hidden" role="uploadcare-uploader" data-public-key="6f870073f3f09eab3217" data-multiple="true" data-multiple-max="7" data-tabs="file url" />
+            </div>
+        </section>
+
+        <section id="dashboard">
+            <h2 class="text-2xl font-semibold text-white mb-4">My Scripts</h2>
+            <div id="scripts-list" class="space-y-4">
+                <p class="text-gray-500">No scripts found. Upload one to get started!</p>
+            </div>
+        </section>
+
+    </div>
+
+    <div id="log-modal" class="fixed inset-0 modal-bg items-center justify-center z-40 hidden">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-11/12 max-w-4xl h-5/6 flex flex-col">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-semibold text-white">Logs for <span id="log-filename" class="font-mono"></span></h3>
+                <button id="close-modal-btn" class="text-gray-400 hover:text-white">&times;</button>
+            </div>
+            <div class="p-4 flex-grow overflow-y-auto">
+                <button id="analyze-logs-btn" class="w-full mb-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors flex items-center justify-center disabled:opacity-50">
+                    <span id="analyze-btn-text">✨ Analyze Logs with AI</span>
+                    <div id="analyze-spinner" class="spinner !w-5 !h-5 ml-3 hidden"></div>
+                </button>
+                <div id="ai-analysis-container" class="mb-4 hidden">
+                    <h4 class="text-lg font-semibold text-blue-400 mb-2">AI Analysis:</h4>
+                    <div id="ai-analysis-content" class="p-4 bg-gray-900 rounded markdown-content"></div>
+                </div>
+                <pre id="log-content" class="w-full h-full bg-gray-900 text-sm text-gray-300 p-4 rounded font-mono whitespace-pre-wrap break-words"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300">
+        <p>Notification Text</p>
+    </div>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        // --- Configuration ---
+        const CONFIG = {
+            BACKEND_URL: 'https://your-render-app-name.onrender.com', // <-- IMPORTANT: Change this to your Render backend URL
+            API_KEY: 'change-this-to-your-own-secret-key', // <-- IMPORTANT: Must match SECRET_API_KEY in hhb.py
+            LOG_REFRESH_INTERVAL: 5000, // 5 seconds
+        };
+
+        // --- State ---
+        let state = {
+            userId: null,
+            logPollingInterval: null,
+        };
+
+        // --- DOM Elements ---
+        const DOMElements = {
+            loadingOverlay: document.getElementById('loading-overlay'),
+            userIdDisplay: document.getElementById('user-id-display'),
+            scriptsList: document.getElementById('scripts-list'),
+            refreshBtn: document.getElementById('refresh-scripts-btn'),
+            logModal: {
+                container: document.getElementById('log-modal'),
+                closeBtn: document.getElementById('close-modal-btn'),
+                filename: document.getElementById('log-filename'),
+                content: document.getElementById('log-content'),
+                analyzeBtn: document.getElementById('analyze-logs-btn'),
+                analyzeBtnText: document.getElementById('analyze-btn-text'),
+                analyzeSpinner: document.getElementById('analyze-spinner'),
+                aiContainer: document.getElementById('ai-analysis-container'),
+                aiContent: document.getElementById('ai-analysis-content'),
+            },
+            notification: document.getElementById('notification'),
+        };
+
+        // --- API Helper ---
+        const api = {
+            async request(endpoint, options = {}) {
+                const url = `${CONFIG.BACKEND_URL}${endpoint}`;
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-Api-Key': CONFIG.API_KEY,
+                };
+                try {
+                    const response = await fetch(url, { ...options, headers });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                } catch (error) {
+                    showNotification(`Error: ${error.message}`, 'error');
+                    console.error('API request failed:', error);
+                    throw error;
+                }
+            },
+            register: () => api.request('/api/register', { method: 'POST' }),
+            upload: (userId, files) => api.request(`/api/upload/${userId}`, { method: 'POST', body: JSON.stringify({ files }) }),
+            getScripts: (userId) => api.request(`/api/scripts/${userId}`),
+            startScript: (userId, filename) => api.request(`/api/scripts/${userId}/${filename}/start`, { method: 'POST' }),
+            stopScript: (userId, filename) => api.request(`/api/scripts/${userId}/${filename}/stop`, { method: 'POST' }),
+            deleteScript: (userId, filename) => api.request(`/api/scripts/${userId}/${filename}`, { method: 'DELETE' }),
+            getLogs: (userId, filename) => api.request(`/api/logs/${userId}/${filename}`),
+            analyzeLogs: (userId, filename) => api.request(`/api/logs/${userId}/${filename}/analyze`, { method: 'POST' }),
+        };
+
+        // --- Core Functions ---
+        const initializeApp = async () => {
+            let userId = localStorage.getItem('botHostifyUserId');
+            if (!userId) {
+                try {
+                    const data = await api.register();
+                    userId = data.user_id;
+                    localStorage.setItem('botHostifyUserId', userId);
+                } catch (error) {
+                    DOMElements.userIdDisplay.textContent = 'Error registering user.';
+                    DOMElements.loadingOverlay.style.display = 'none';
+                    return;
+                }
+            }
+            state.userId = userId;
+            DOMElements.userIdDisplay.textContent = userId;
+            await fetchAndRenderScripts();
+            initializeUploadWidget();
+            DOMElements.loadingOverlay.style.display = 'none';
+        };
+
+        const fetchAndRenderScripts = async () => {
+            if (!state.userId) return;
+            DOMElements.loadingOverlay.style.display = 'flex';
+            try {
+                const scripts = await api.getScripts(state.userId);
+                renderScripts(scripts);
+            } finally {
+                DOMElements.loadingOverlay.style.display = 'none';
+            }
+        };
+
+        const renderScripts = (scripts) => {
+            DOMElements.scriptsList.innerHTML = '';
+            if (scripts.length === 0) {
+                DOMElements.scriptsList.innerHTML = '<p class="text-gray-500">No scripts found. Upload one to get started!</p>';
+                return;
+            }
+            scripts.forEach(script => {
+                const isRunning = script.status === 'running';
+                const scriptElement = document.createElement('div');
+                scriptElement.className = 'bg-gray-800 p-4 rounded-lg flex items-center justify-between';
+                scriptElement.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="status-dot ${isRunning ? 'status-running' : 'status-stopped'}"></span>
+                        <span class="font-mono text-white">${script.name}</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button class="toggle-run-btn px-3 py-1 text-sm rounded ${isRunning ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}" data-filename="${script.name}" data-is-running="${isRunning}">
+                           <span class="btn-text">${isRunning ? 'Stop' : 'Start'}</span>
+                           <div class="spinner !w-4 !h-4 hidden"></div>
+                        </button>
+                        <button class="view-logs-btn px-3 py-1 text-sm bg-gray-600 hover:bg-gray-700 rounded" data-filename="${script.name}">Logs</button>
+                        <button class="delete-btn px-3 py-1 text-sm bg-red-800 hover:bg-red-900 rounded" data-filename="${script.name}">Delete</button>
+                    </div>
+                `;
+                DOMElements.scriptsList.appendChild(scriptElement);
+            });
+        };
+        
+        const initializeUploadWidget = () => {
+            const widget = uploadcare.Widget('[role=uploadcare-uploader]');
+            widget.onUploadComplete(async (groupInfo) => {
+                DOMElements.loadingOverlay.style.display = 'flex';
+                try {
+                    const fileUuids = groupInfo.files().map(file => file.uuid);
+                    await api.upload(state.userId, fileUuids);
+                    showNotification('Files uploaded successfully!', 'success');
+                    await fetchAndRenderScripts();
+                } finally {
+                    DOMElements.loadingOverlay.style.display = 'none';
+                }
+            });
+        };
+        
+        // --- Event Handlers ---
+        DOMElements.refreshBtn.addEventListener('click', fetchAndRenderScripts);
+
+        DOMElements.scriptsList.addEventListener('click', async (e) => {
+            const button = e.target.closest('button');
+            if (!button) return;
+            
+            const filename = button.dataset.filename;
+            
+            if (button.classList.contains('toggle-run-btn')) {
+                const isRunning = button.dataset.isRunning === 'true';
+                const btnText = button.querySelector('.btn-text');
+                const spinner = button.querySelector('.spinner');
+                
+                btnText.classList.add('hidden');
+                spinner.classList.remove('hidden');
+                button.disabled = true;
+
+                try {
+                    if (isRunning) {
+                        await api.stopScript(state.userId, filename);
+                        showNotification(`Stopped ${filename}`, 'success');
+                    } else {
+                        await api.startScript(state.userId, filename);
+                        showNotification(`Started ${filename}`, 'success');
+                    }
+                    await fetchAndRenderScripts();
+                } catch (error) {
+                    // Notification is shown by the API helper
+                } finally {
+                    // In case of error before re-render
+                    btnText.classList.remove('hidden');
+                    spinner.classList.add('hidden');
+                    button.disabled = false;
+                }
+            }
+
+            if (button.classList.contains('view-logs-btn')) {
+                openLogModal(filename);
+            }
+
+            if (button.classList.contains('delete-btn')) {
+                if (confirm(`Are you sure you want to delete ${filename}? This action cannot be undone.`)) {
+                    DOMElements.loadingOverlay.style.display = 'flex';
+                    try {
+                        await api.deleteScript(state.userId, filename);
+                        showNotification(`${filename} deleted successfully.`, 'success');
+                        await fetchAndRenderScripts();
+                    } finally {
+                        DOMElements.loadingOverlay.style.display = 'none';
+                    }
+                }
+            }
+        });
+
+        // --- Log Modal Logic ---
+        const openLogModal = (filename) => {
+            DOMElements.logModal.filename.textContent = filename;
+            DOMElements.logModal.content.textContent = 'Loading logs...';
+            DOMElements.logModal.aiContainer.classList.add('hidden');
+            DOMElements.logModal.aiContent.innerHTML = '';
+            
+            DOMElements.logModal.container.classList.remove('hidden');
+            DOMElements.logModal.container.classList.add('flex');
+            
+            const fetchLogs = async () => {
+                const data = await api.getLogs(state.userId, filename);
+                DOMElements.logModal.content.textContent = data.logs || '(No log output)';
+            };
+
+            fetchLogs(); // Initial fetch
+            state.logPollingInterval = setInterval(fetchLogs, CONFIG.LOG_REFRESH_INTERVAL);
+
+            // Set up one-time event listener for the analyze button
+            const analyzeBtnClone = DOMElements.logModal.analyzeBtn.cloneNode(true);
+            DOMElements.logModal.analyzeBtn.parentNode.replaceChild(analyzeBtnClone, DOMElements.logModal.analyzeBtn);
+            DOMElements.logModal.analyzeBtn = analyzeBtnClone;
+            
+            analyzeBtnClone.addEventListener('click', async () => {
+                DOMElements.logModal.analyzeBtnText = analyzeBtnClone.querySelector('#analyze-btn-text');
+                DOMElements.logModal.analyzeSpinner = analyzeBtnClone.querySelector('#analyze-spinner');
+
+                DOMElements.logModal.analyzeBtnText.textContent = 'Analyzing...';
+                DOMElements.logModal.analyzeSpinner.classList.remove('hidden');
+                analyzeBtnClone.disabled = true;
+
+                try {
+                    const result = await api.analyzeLogs(state.userId, filename);
+                    DOMElements.logModal.aiContent.innerHTML = marked.parse(result.analysis);
+                    DOMElements.logModal.aiContainer.classList.remove('hidden');
+                } finally {
+                    DOMElements.logModal.analyzeBtnText.textContent = '✨ Analyze Logs with AI';
+                    DOMElements.logModal.analyzeSpinner.classList.add('hidden');
+                    analyzeBtnClone.disabled = false;
+                }
+            });
+        };
+
+        const closeLogModal = () => {
+            DOMElements.logModal.container.classList.add('hidden');
+            DOMElements.logModal.container.classList.remove('flex');
+            if (state.logPollingInterval) {
+                clearInterval(state.logPollingInterval);
+                state.logPollingInterval = null;
+            }
+        };
+
+        DOMElements.logModal.closeBtn.addEventListener('click', closeLogModal);
+        DOMElements.logModal.container.addEventListener('click', (e) => {
+            if (e.target === DOMElements.logModal.container) {
+                closeLogModal();
+            }
+        });
+
+        // --- UI Helpers ---
+        const showNotification = (message, type = 'success') => {
+            const notification = DOMElements.notification;
+            notification.textContent = message;
+
+            notification.classList.remove('bg-green-500', 'bg-red-500');
+            if (type === 'error') {
+                notification.classList.add('bg-red-500');
+            } else {
+                notification.classList.add('bg-green-500');
+            }
+
+            notification.classList.remove('translate-y-20', 'opacity-0');
+            notification.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                notification.classList.remove('translate-y-0', 'opacity-100');
+                notification.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        };
+
+        // --- App Initialization ---
+        initializeApp();
+    });
+    </script>
+</body>
+</html>
