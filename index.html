@@ -100,262 +100,127 @@
 
     <!-- Notification Toast -->
     <div id="notification" class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300"></div>
-
-    <script>
+<script>
     document.addEventListener('DOMContentLoaded', () => {
 
         const CONFIG = {
-            BACKEND_URL: 'https://d5d76aaa85f768.lhr.life', // <-- PASTE YOUR RENDER URL HERE
-            API_KEY: 'change-this-to-your-own-secret-key',      // <-- PASTE YOUR SECRET API KEY HERE
-            LOG_REFRESH_INTERVAL: 5000,
-            // UPLOADCARE_PUBLIC_KEY is NO LONGER NEEDED HERE
+            BACKEND_URL: 'https://1fdf10bbadfa8b.lhr.life', // Your backend URL
+            API_KEY: 'change-this-to-your-own-secret-key',
         };
         
-        // --- All other JavaScript code remains exactly the same ---
-        // State, DOM Elements, API Helper, Core Logic, Event Handlers...
-        // No changes are needed in the rest of the script.
-        let state = { userId: null, logPollingInterval: null };
-
-        const DOMElements = {
-            loadingOverlay: document.getElementById('loading-overlay'),
-            loadingText: document.getElementById('loading-text'),
-            userIdDisplay: document.getElementById('user-id-display'),
-            scriptsList: document.getElementById('scripts-list'),
-            refreshBtn: document.getElementById('refresh-scripts-btn'),
-            logModal: {
-                container: document.getElementById('log-modal'),
-                closeBtn: document.getElementById('close-modal-btn'),
-                filename: document.getElementById('log-filename'),
-                content: document.getElementById('log-content'),
-                analyzeBtn: document.getElementById('analyze-logs-btn'),
-                aiContainer: document.getElementById('ai-analysis-container'),
-                aiContent: document.getElementById('ai-analysis-content'),
-            },
-            notification: document.getElementById('notification'),
+        // --- STATE MANAGEMENT ---
+        let state = {
+            email: null 
         };
 
+        // --- DOM ELEMENTS ---
+        const DOMElements = {
+            loginSection: document.getElementById('login-section'),
+            loginForm: document.getElementById('login-form'),
+            emailInput: document.getElementById('email-input'),
+            dashboard: document.getElementById('dashboard'),
+            scriptsList: document.getElementById('scripts-list'),
+            notification: document.getElementById('notification'),
+            // Add other elements if they are outside the new dashboard scope
+            uploadSection: document.getElementById('upload-section') 
+        };
+
+        // --- API HELPER ---
         const api = {
             async request(endpoint, options = {}) {
                 const url = `${CONFIG.BACKEND_URL}${endpoint}`;
                 const headers = { 'Content-Type': 'application/json', 'X-Api-Key': CONFIG.API_KEY };
                 try {
                     const response = await fetch(url, { ...options, headers });
+                    const responseData = await response.json();
                     if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({ error: `HTTP error! Status: ${response.status}` }));
-                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                        throw new Error(responseData.error || `HTTP error! Status: ${response.status}`);
                     }
-                    const contentType = response.headers.get("content-type");
-                    if (contentType && contentType.indexOf("application/json") !== -1) {
-                        return response.json();
-                    }
-                    return {};
+                    return responseData;
                 } catch (error) {
                     showNotification(`API Error: ${error.message}`, 'error');
                     console.error('API request failed:', error);
                     throw error;
                 }
             },
-            register: () => api.request('/api/register', { method: 'POST' }),
-            upload: (userId, files) => api.request(`/api/upload/${userId}`, { method: 'POST', body: JSON.stringify({ files }) }),
-            getScripts: (userId) => api.request(`/api/scripts/${userId}`),
-            startScript: (userId, filename) => api.request(`/api/scripts/${userId}/${filename}/start`, { method: 'POST' }),
-            stopScript: (userId, filename) => api.request(`/api/scripts/${userId}/${filename}/stop`, { method: 'POST' }),
-            deleteScript: (userId, filename) => api.request(`/api/scripts/${userId}/${filename}`, { method: 'DELETE' }),
-            getLogs: (userId, filename) => api.request(`/api/logs/${userId}/${filename}`),
-            analyzeLogs: (userId, filename) => api.request(`/api/logs/${userId}/${filename}/analyze`, { method: 'POST' }),
+            login: (email) => api.request('/api/login', { method: 'POST', body: JSON.stringify({ email }) }),
+            getScripts: (email) => api.request(`/api/scripts/${email}`),
+            saveFile: (email, file_id, file_name) => api.request('/api/upload', { method: 'POST', body: JSON.stringify({ email, file_id, file_name }) }),
+            runScript: (email, file_name) => api.request('/api/run', { method: 'POST', body: JSON.stringify({ email, file_name }) })
+        };
+        
+        // --- CORE LOGIC ---
+
+        const initializeApp = () => {
+            const savedEmail = localStorage.getItem('userEmail');
+            if (savedEmail) {
+                state.email = savedEmail;
+                showDashboard();
+                fetchAndRenderScripts();
+            } else {
+                showLogin();
+            }
         };
 
-        const initializeApp = async () => {
-            DOMElements.loadingText.textContent = 'Connecting to backend...';
-            DOMElements.loadingOverlay.style.display = 'flex';
-            try {
-                let userId = localStorage.getItem('botHostifyUserId');
-                if (!userId) {
-                    DOMElements.loadingText.textContent = 'Registering new user...';
-                    const data = await api.register();
-                    userId = data.user_id;
-                    localStorage.setItem('botHostifyUserId', userId);
-                }
-                state.userId = userId;
-                DOMElements.userIdDisplay.textContent = userId;
-                DOMElements.loadingText.textContent = 'Loading your scripts...';
-                await fetchAndRenderScripts();
-                initializeUploadWidget();
-            } catch (error) {
-                DOMElements.loadingText.textContent = 'Connection Failed. Please refresh.';
-                DOMElements.userIdDisplay.textContent = 'Error';
-                DOMElements.scriptsList.innerHTML = `<p class="text-red-400 text-center">Could not connect to the backend. Please ensure the URL is correct and the service is running.</p>`;
-                return;
-            } finally {
-                DOMElements.loadingOverlay.style.display = 'none';
-            }
+        const showLogin = () => {
+            DOMElements.loginSection.style.display = 'block';
+            DOMElements.dashboard.style.display = 'none';
+            DOMElements.uploadSection.style.display = 'none';
+        };
+
+        const showDashboard = () => {
+            DOMElements.loginSection.style.display = 'none';
+            DOMElements.dashboard.style.display = 'block';
+            DOMElements.uploadSection.style.display = 'block';
+            initializeUploadWidget(); // Initialize uploader only after login
         };
 
         const fetchAndRenderScripts = async () => {
-            if (!state.userId) return;
+            if (!state.email) return;
             try {
-                const scripts = await api.getScripts(state.userId);
-                renderScripts(scripts);
+                const scriptNames = await api.getScripts(state.email);
+                renderScripts(scriptNames);
             } catch (error) {
-                 DOMElements.scriptsList.innerHTML = `<p class="text-yellow-400 text-center">Could not load scripts. Please try refreshing the page.</p>`;
+                DOMElements.scriptsList.innerHTML = `<p class="text-yellow-400 text-center">Could not load scripts.</p>`;
             }
         };
 
-        const renderScripts = (scripts) => {
+        const renderScripts = (scriptNames) => {
             DOMElements.scriptsList.innerHTML = '';
-            if (!scripts || scripts.length === 0) {
-                DOMElements.scriptsList.innerHTML = '<p class="text-gray-500 text-center">No scripts found. Upload one to get started!</p>';
+            if (!scriptNames || scriptNames.length === 0) {
+                DOMElements.scriptsList.innerHTML = '<p class="text-gray-500 text-center">No scripts saved. Upload one to get started!</p>';
                 return;
             }
-            scripts.forEach(script => {
-                const isRunning = script.status === 'running';
+            scriptNames.forEach(name => {
                 const scriptElement = document.createElement('div');
-                scriptElement.className = 'bg-gray-800 p-4 rounded-lg flex items-center justify-between flex-wrap gap-2';
+                scriptElement.className = 'bg-gray-800 p-4 rounded-lg flex items-center justify-between';
                 scriptElement.innerHTML = `
-                    <div class="flex items-center">
-                        <span class="status-dot ${isRunning ? 'status-running' : 'status-stopped'}"></span>
-                        <span class="font-mono text-white break-all">${script.name}</span>
+                    <div>
+                        <span class="font-mono text-white">${name}</span>
                     </div>
-                    <div class="flex items-center space-x-2 flex-shrink-0">
-                        <button class="toggle-run-btn px-3 py-1 text-sm rounded transition-colors ${isRunning ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}" data-filename="${script.name}">
-                           <span class="btn-text">${isRunning ? 'Stop' : 'Start'}</span>
-                           <div class="spinner !w-4 !h-4 hidden"></div>
-                        </button>
-                        <button class="view-logs-btn px-3 py-1 text-sm bg-gray-600 hover:bg-gray-700 rounded" data-filename="${script.name}">Logs</button>
-                        <button class="delete-btn px-3 py-1 text-sm bg-red-800 hover:bg-red-900 rounded" data-filename="${script.name}">Delete</button>
+                    <div>
+                        <button class="run-btn px-4 py-2 text-sm rounded transition-colors bg-green-600 hover:bg-green-700" data-filename="${name}">Run</button>
                     </div>
                 `;
                 DOMElements.scriptsList.appendChild(scriptElement);
             });
         };
-        
+
         const initializeUploadWidget = () => {
             const widget = uploadcare.Widget('[role=uploadcare-uploader]');
-            widget.onUploadComplete(async (info) => {
-                DOMElements.loadingOverlay.style.display = 'flex';
-                DOMElements.loadingText.textContent = 'Processing uploaded files...';
+            widget.onUploadComplete(async (fileInfo) => {
                 try {
-                    let fileUuids = [];
-                    // This logic correctly handles both groups and single files
-                    if (typeof info.files === 'function') {
-                        // This opens the group and gets the clean UUIDs from the files inside
-                        fileUuids = info.files().map(file => file.uuid);
-                    } else if (info.uuid) {
-                        // This handles a single file upload
-                        fileUuids = [info.uuid];
-                    }
-
-                    if (fileUuids.length > 0) {
-                        // This now sends the CORRECT, clean UUIDs to the backend
-                        await api.upload(state.userId, fileUuids);
-                        showNotification('Files uploaded successfully!', 'success');
-                        await fetchAndRenderScripts();
-                    } else {
-                        throw new Error("Could not identify uploaded files.");
-                    }
+                    // This new system works best with single file uploads
+                    const file_id = fileInfo.uuid;
+                    const file_name = fileInfo.name;
+                    await api.saveFile(state.email, file_id, file_name);
+                    showNotification(`'${file_name}' saved successfully!`, 'success');
+                    fetchAndRenderScripts(); // Refresh the list
                 } catch (error) {
-                    const errorMessage = error.message || 'An unknown error occurred during upload processing.';
-                    showNotification(errorMessage, 'error');
-                } finally {
-                    DOMElements.loadingOverlay.style.display = 'none';
+                    showNotification(`Failed to save file: ${error.message}`, 'error');
                 }
             });
         };
-        
-        DOMElements.refreshBtn.addEventListener('click', fetchAndRenderScripts);
-        DOMElements.scriptsList.addEventListener('click', async (e) => {
-            const button = e.target.closest('button');
-            if (!button) return;
-            const filename = button.dataset.filename;
-
-            if (button.classList.contains('toggle-run-btn')) {
-                const btnText = button.querySelector('.btn-text');
-                const spinner = button.querySelector('.spinner');
-                const isRunning = btnText.textContent === 'Stop';
-                
-                btnText.classList.add('hidden');
-                spinner.classList.remove('hidden');
-                button.disabled = true;
-
-                try {
-                    if (isRunning) {
-                        await api.stopScript(state.userId, filename);
-                        showNotification(`Stopped ${filename}`, 'success');
-                    } else {
-                        await api.startScript(state.userId, filename);
-                        showNotification(`Started ${filename}`, 'success');
-                    }
-                    await fetchAndRenderScripts();
-                } catch (error) {
-                    btnText.classList.remove('hidden');
-                    spinner.classList.add('hidden');
-                    button.disabled = false;
-                }
-            } else if (button.classList.contains('view-logs-btn')) {
-                openLogModal(filename);
-            } else if (button.classList.contains('delete-btn')) {
-                if (confirm(`Are you sure you want to delete ${filename}? This action cannot be undone.`)) {
-                    DOMElements.loadingOverlay.style.display = 'flex';
-                    try {
-                        await api.deleteScript(state.userId, filename);
-                        showNotification(`${filename} deleted successfully.`, 'success');
-                        await fetchAndRenderScripts();
-                    } finally {
-                        DOMElements.loadingOverlay.style.display = 'none';
-                    }
-                }
-            }
-        });
-
-        const openLogModal = async (filename) => {
-            const modal = DOMElements.logModal;
-            modal.filename.textContent = filename;
-            modal.content.textContent = 'Loading logs...';
-            modal.aiContainer.classList.add('hidden');
-            modal.aiContent.innerHTML = '';
-            modal.container.classList.remove('hidden');
-            modal.container.classList.add('flex');
-
-            const fetchLogs = async () => {
-                const data = await api.getLogs(state.userId, filename);
-                modal.content.textContent = data.logs || '(No log output)';
-            };
-
-            await fetchLogs();
-            state.logPollingInterval = setInterval(fetchLogs, CONFIG.LOG_REFRESH_INTERVAL);
-
-            const analyzeBtn = document.getElementById('analyze-logs-btn');
-            const analyzeBtnClone = analyzeBtn.cloneNode(true);
-            analyzeBtn.parentNode.replaceChild(analyzeBtnClone, analyzeBtn);
-            
-            analyzeBtnClone.addEventListener('click', async () => {
-                const textSpan = analyzeBtnClone.querySelector('#analyze-btn-text');
-                const spinner = analyzeBtnClone.querySelector('#analyze-spinner');
-                textSpan.textContent = 'Analyzing...';
-                spinner.classList.remove('hidden');
-                analyzeBtnClone.disabled = true;
-                try {
-                    const result = await api.analyzeLogs(state.userId, filename);
-                    modal.aiContent.innerHTML = marked.parse(result.analysis);
-                    modal.aiContainer.classList.remove('hidden');
-                } finally {
-                    textSpan.textContent = '✨ Analyze Logs with AI';
-                    spinner.classList.add('hidden');
-                    analyzeBtnClone.disabled = false;
-                }
-            });
-        };
-
-        const closeLogModal = () => {
-            DOMElements.logModal.container.classList.add('hidden');
-            DOMElements.logModal.container.classList.remove('flex');
-            clearInterval(state.logPollingInterval);
-        };
-
-        DOMElements.logModal.closeBtn.addEventListener('click', closeLogModal);
-        DOMElements.logModal.container.addEventListener('click', (e) => {
-            if (e.target === DOMElements.logModal.container) closeLogModal();
-        });
 
         const showNotification = (message, type = 'success') => {
             const el = DOMElements.notification;
@@ -367,9 +232,49 @@
             }, 3000);
         };
         
+        // --- EVENT HANDLERS ---
+
+        DOMElements.loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = DOMElements.emailInput.value;
+            if (!email) return;
+            
+            try {
+                await api.login(email);
+                state.email = email;
+                localStorage.setItem('userEmail', email);
+                showDashboard();
+                fetchAndRenderScripts();
+            } catch (error) {
+                // Notification is shown by the api helper
+            }
+        });
+
+        DOMElements.scriptsList.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('run-btn')) {
+                const button = e.target;
+                const filename = button.dataset.filename;
+                
+                button.textContent = 'Starting...';
+                button.disabled = true;
+
+                try {
+                    const result = await api.runScript(state.email, filename);
+                    showNotification(result.message, 'success');
+                } catch (error) {
+                     // Notification is shown by the api helper
+                } finally {
+                    button.textContent = 'Run';
+                    button.disabled = false;
+                }
+            }
+        });
+        
+        // --- INITIALIZE THE APP ---
         initializeApp();
     });
-    </script>
+            </script>
+                    
 </body>
 </html>
 
