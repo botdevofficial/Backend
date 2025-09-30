@@ -4,8 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BotHostify - Host Your Scripts</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- ================== UPLOADCARE CONFIGURATION (THE FIX) ================== -->
+    <!-- 1. The Public Key MUST be defined here, BEFORE the library is loaded. -->
+    <script>
+        UPLOADCARE_PUBLIC_KEY = '6f870073f3f09eab3217';
+    </script>
+
+    <!-- 2. Now, load the library. It will find the key defined above. -->
     <script src="https://ucarecdn.com/libs/widget/3.x/uploadcare.full.min.js"></script>
+    <!-- ======================================================================= -->
+
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body { background-color: #111827; color: #d1d5db; }
@@ -15,7 +25,6 @@
         .status-stopped { background-color: #ef4444; /* red-500 */ }
         .spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid #3b82f6; /* blue-500 */ width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* Styles for AI-generated Markdown content */
         .markdown-content h1, .markdown-content h2 { font-size: 1.25em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; border-bottom: 1px solid #4b5563; padding-bottom: 0.25em; }
         .markdown-content p { margin-bottom: 1em; }
         .markdown-content code { background-color: #374151; padding: 0.2em 0.4em; border-radius: 3px; font-family: monospace; }
@@ -53,7 +62,8 @@
             <h2 class="text-2xl font-semibold text-white mb-4">Upload Your Scripts</h2>
             <div class="bg-gray-800 p-6 rounded-lg text-center">
                 <p class="mb-4">Upload .py, .js, or .zip files. ZIP archives will be automatically extracted.</p>
-                <input type="hidden" role="uploadcare-uploader" />
+                <!-- This input is now automatically configured by the global key -->
+                <input type="hidden" role="uploadcare-uploader" data-multiple="true" data-multiple-max="7" data-tabs="file url" />
             </div>
         </section>
 
@@ -68,7 +78,8 @@
 
     <!-- Log Viewer Modal -->
     <div id="log-modal" class="fixed inset-0 modal-bg items-center justify-center z-40 hidden">
-        <div class="bg-gray-800 rounded-lg shadow-xl w-11/12 max-w-4xl h-5/6 flex flex-col">
+         <!-- Modal content is unchanged -->
+         <div class="bg-gray-800 rounded-lg shadow-xl w-11/12 max-w-4xl h-5/6 flex flex-col">
             <div class="p-4 border-b border-gray-700 flex justify-between items-center">
                 <h3 class="text-xl font-semibold text-white">Logs for <span id="log-filename" class="font-mono"></span></h3>
                 <button id="close-modal-btn" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
@@ -93,20 +104,17 @@
     <script>
     document.addEventListener('DOMContentLoaded', () => {
 
-        // --- 1. CONFIGURATION ---
-        // Enter your confirmed, working credentials here.
         const CONFIG = {
             BACKEND_URL: 'https://trycatch-koiv.onrender.com', // <-- PASTE YOUR RENDER URL HERE
             API_KEY: 'change-this-to-your-own-secret-key',      // <-- PASTE YOUR SECRET API KEY HERE
             LOG_REFRESH_INTERVAL: 5000,
-            UPLOADCARE_PUBLIC_KEY: '6f870073f3f09eab3217'
+            // UPLOADCARE_PUBLIC_KEY is NO LONGER NEEDED HERE
         };
-
-        // --- 2. STATE & DOM ELEMENTS ---
-        let state = {
-            userId: null,
-            logPollingInterval: null,
-        };
+        
+        // --- All other JavaScript code remains exactly the same ---
+        // State, DOM Elements, API Helper, Core Logic, Event Handlers...
+        // No changes are needed in the rest of the script.
+        let state = { userId: null, logPollingInterval: null };
 
         const DOMElements = {
             loadingOverlay: document.getElementById('loading-overlay'),
@@ -114,7 +122,6 @@
             userIdDisplay: document.getElementById('user-id-display'),
             scriptsList: document.getElementById('scripts-list'),
             refreshBtn: document.getElementById('refresh-scripts-btn'),
-            uploaderInput: document.querySelector('[role=uploadcare-uploader]'),
             logModal: {
                 container: document.getElementById('log-modal'),
                 closeBtn: document.getElementById('close-modal-btn'),
@@ -127,7 +134,6 @@
             notification: document.getElementById('notification'),
         };
 
-        // --- 3. API HELPER ---
         const api = {
             async request(endpoint, options = {}) {
                 const url = `${CONFIG.BACKEND_URL}${endpoint}`;
@@ -138,12 +144,11 @@
                         const errorData = await response.json().catch(() => ({ error: `HTTP error! Status: ${response.status}` }));
                         throw new Error(errorData.error || `HTTP ${response.status}`);
                     }
-                    // Handle cases where backend sends no JSON body on success (e.g., 204 No Content)
                     const contentType = response.headers.get("content-type");
                     if (contentType && contentType.indexOf("application/json") !== -1) {
                         return response.json();
                     }
-                    return {}; // Return empty object for non-json success responses
+                    return {};
                 } catch (error) {
                     showNotification(`API Error: ${error.message}`, 'error');
                     console.error('API request failed:', error);
@@ -160,11 +165,9 @@
             analyzeLogs: (userId, filename) => api.request(`/api/logs/${userId}/${filename}/analyze`, { method: 'POST' }),
         };
 
-        // --- 4. CORE APPLICATION LOGIC ---
         const initializeApp = async () => {
             DOMElements.loadingText.textContent = 'Connecting to backend...';
             DOMElements.loadingOverlay.style.display = 'flex';
-
             try {
                 let userId = localStorage.getItem('botHostifyUserId');
                 if (!userId) {
@@ -175,19 +178,15 @@
                 }
                 state.userId = userId;
                 DOMElements.userIdDisplay.textContent = userId;
-
                 DOMElements.loadingText.textContent = 'Loading your scripts...';
                 await fetchAndRenderScripts();
-                
                 initializeUploadWidget();
-
             } catch (error) {
                 DOMElements.loadingText.textContent = 'Connection Failed. Please refresh.';
                 DOMElements.userIdDisplay.textContent = 'Error';
                 DOMElements.scriptsList.innerHTML = `<p class="text-red-400 text-center">Could not connect to the backend. Please ensure the URL is correct and the service is running.</p>`;
-                return; // Stop execution
+                return;
             } finally {
-                // This block GUARANTEES the loading screen will be hidden
                 DOMElements.loadingOverlay.style.display = 'none';
             }
         };
@@ -231,12 +230,8 @@
         };
         
         const initializeUploadWidget = () => {
-            DOMElements.uploaderInput.setAttribute('data-public-key', CONFIG.UPLOADCARE_PUBLIC_KEY);
-            DOMElements.uploaderInput.setAttribute('data-multiple', 'true');
-            DOMElements.uploaderInput.setAttribute('data-multiple-max', '7');
-            DOMElements.uploaderInput.setAttribute('data-tabs', 'file url');
-
-            const widget = uploadcare.Widget(DOMElements.uploaderInput);
+            // The widget now finds its public key automatically from the global scope.
+            const widget = uploadcare.Widget('[role=uploadcare-uploader]');
             widget.onUploadComplete(async (groupInfo) => {
                 DOMElements.loadingOverlay.style.display = 'flex';
                 DOMElements.loadingText.textContent = 'Processing uploaded files...';
@@ -251,9 +246,7 @@
             });
         };
         
-        // --- 5. EVENT HANDLERS & UI HELPERS ---
         DOMElements.refreshBtn.addEventListener('click', fetchAndRenderScripts);
-
         DOMElements.scriptsList.addEventListener('click', async (e) => {
             const button = e.target.closest('button');
             if (!button) return;
@@ -278,7 +271,6 @@
                     }
                     await fetchAndRenderScripts();
                 } catch (error) {
-                    // Re-enable button on failure
                     btnText.classList.remove('hidden');
                     spinner.classList.add('hidden');
                     button.disabled = false;
@@ -299,7 +291,6 @@
             }
         });
 
-        // Log Modal Logic
         const openLogModal = async (filename) => {
             const modal = DOMElements.logModal;
             modal.filename.textContent = filename;
@@ -317,8 +308,7 @@
             await fetchLogs();
             state.logPollingInterval = setInterval(fetchLogs, CONFIG.LOG_REFRESH_INTERVAL);
 
-            // Re-bind analyze button listener to prevent multiple triggers
-            const analyzeBtn = modal.analyzeBtn;
+            const analyzeBtn = document.getElementById('analyze-logs-btn');
             const analyzeBtnClone = analyzeBtn.cloneNode(true);
             analyzeBtn.parentNode.replaceChild(analyzeBtnClone, analyzeBtn);
             
@@ -361,7 +351,6 @@
             }, 3000);
         };
         
-        // --- 6. START THE APP ---
         initializeApp();
     });
     </script>
