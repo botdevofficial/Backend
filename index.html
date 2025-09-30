@@ -230,20 +230,31 @@
         };
         
         const initializeUploadWidget = () => {
-            // The widget now finds its public key automatically from the global scope.
             const widget = uploadcare.Widget('[role=uploadcare-uploader]');
-            widget.onUploadComplete(async (groupInfo) => {
+            widget.onUploadComplete(async (info) => {
                 DOMElements.loadingOverlay.style.display = 'flex';
                 DOMElements.loadingText.textContent = 'Processing uploaded files...';
                 try {
-                    const fileUuids = groupInfo.files().map(file => file.uuid);
-                    await api.upload(state.userId, fileUuids);
-                    showNotification('Files uploaded successfully!', 'success');
-                    await fetchAndRenderScripts();
+                    let fileUuids = [];
+                    // This new block checks if 'info' is a group or a single file
+                    if (typeof info.files === 'function') {
+                        // This handles a group of files
+                        fileUuids = info.files().map(file => file.uuid);
+                    } else if (info.uuid) {
+                        // This handles a single file
+                        fileUuids = [info.uuid];
+                    }
+
+                    if (fileUuids.length > 0) {
+                        await api.upload(state.userId, fileUuids);
+                        showNotification('Files uploaded successfully!', 'success');
+                        await fetchAndRenderScripts();
+                    } else {
+                        throw new Error("Could not identify uploaded files.");
+                    }
                 } catch (error) {
-                    // THIS IS THE NEW PART THAT HANDLES THE ERROR
-                    // It shows the specific error message from the backend.
-                    showNotification(error.message, 'error'); 
+                    const errorMessage = error.message || 'An unknown error occurred during upload processing.';
+                    showNotification(errorMessage, 'error');
                 } finally {
                     DOMElements.loadingOverlay.style.display = 'none';
                 }
