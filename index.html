@@ -240,6 +240,10 @@
                     await api.upload(state.userId, fileUuids);
                     showNotification('Files uploaded successfully!', 'success');
                     await fetchAndRenderScripts();
+                } catch (error) {
+                    // THIS IS THE NEW PART THAT HANDLES THE ERROR
+                    // It shows the specific error message from the backend.
+                    showNotification(error.message, 'error'); 
                 } finally {
                     DOMElements.loadingOverlay.style.display = 'none';
                 }
